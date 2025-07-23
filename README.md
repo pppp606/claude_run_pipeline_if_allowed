@@ -1,0 +1,1 @@
+# claude_run_pipeline_if_allowed
