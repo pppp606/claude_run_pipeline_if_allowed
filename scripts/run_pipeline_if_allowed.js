@@ -10,29 +10,20 @@ const SETTINGS_PATHS = [
 ];
 
 // Load and merge allow lists
-let allowList = [];
-for (const p of SETTINGS_PATHS) {
-  if (fs.existsSync(p)) {
-    const json = JSON.parse(fs.readFileSync(p, 'utf8'));
-    const items = json?.permissions?.allow ?? [];
-    allowList.push(...items);
+function loadAllowList() {
+  let allowList = [];
+  for (const p of SETTINGS_PATHS) {
+    if (fs.existsSync(p)) {
+      const json = JSON.parse(fs.readFileSync(p, 'utf8'));
+      const items = json?.permissions?.allow ?? [];
+      allowList.push(...items);
+    }
   }
+  return [...new Set(allowList)]; // dedupe
 }
-allowList = [...new Set(allowList)]; // dedupe
-
-// Parse arguments (assumes commands are passed like: node run_pipeline.js cmd1 | cmd2 ...)
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error('❌ Usage: node run_pipeline.js <cmd1> | <cmd2> | ...');
-  process.exit(1);
-}
-
-// Split args by `|`
-const raw = args.join(' ');
-const segments = raw.split('|').map(s => s.trim());
 
 // Function to match a command against allowList
-function isAllowed(command) {
+function isAllowed(command, allowList) {
   const tokens = command.split(/\s+/);
   for (let i = tokens.length; i > 0; i--) {
     const prefix = tokens.slice(0, i).join(' ');
@@ -45,17 +36,49 @@ function isAllowed(command) {
   return false;
 }
 
-// Check each segment
-for (const seg of segments) {
-  if (!isAllowed(seg)) {
-    console.error(`⛔ Not allowed: ${seg}`);
+// Main execution function
+function runPipeline(args) {
+  // Load allow list
+  const allowList = loadAllowList();
+
+  // Parse arguments
+  if (args.length === 0) {
+    console.error('❌ Usage: node run_pipeline.js <cmd1> | <cmd2> | ...');
     process.exit(1);
+  }
+
+  // Split args by `|`
+  const raw = args.join(' ');
+  const segments = raw.split('|').map(s => s.trim());
+
+  // Check each segment
+  for (const seg of segments) {
+    if (!isAllowed(seg, allowList)) {
+      console.error(`⛔ Not allowed: ${seg}`);
+      process.exit(1);
+      return; // Early return for testing
+    }
+  }
+
+  // Execute as full pipeline
+  try {
+    const output = execSync(raw, { stdio: 'inherit', shell: '/bin/bash' });
+  } catch (err) {
+    process.exit(err.status ?? 1);
+    return; // Early return for testing
   }
 }
 
-// Execute as full pipeline
-try {
-  const output = execSync(raw, { stdio: 'inherit', shell: '/bin/bash' });
-} catch (err) {
-  process.exit(err.status ?? 1);
+// Export functions for testing
+module.exports = {
+  loadAllowList,
+  isAllowed,
+  runPipeline,
+  SETTINGS_PATHS
+};
+
+// Only run if this file is executed directly
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  runPipeline(args);
 }
