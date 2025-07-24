@@ -203,14 +203,21 @@ describe('run_pipeline_if_allowed', () => {
     it('should exit with error when no arguments provided', () => {
       runPipeline([]);
       
-      expect(console.error).toHaveBeenCalledWith('❌ Usage: node run_pipeline.js <cmd1> | <cmd2> | ...');
+      expect(console.error).toHaveBeenCalledWith('❌ Usage: node run_pipeline.js \'["cmd1", "cmd2", ...]\'');
       expect(process.exit).toHaveBeenCalledWith(1);
     });
 
-    it('should execute allowed single command', () => {
+    it('should exit with error when multiple arguments provided', () => {
+      runPipeline(['arg1', 'arg2']);
+      
+      expect(console.error).toHaveBeenCalledWith('❌ Usage: node run_pipeline.js \'["cmd1", "cmd2", ...]\'');
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    it('should execute allowed single command from JSON array', () => {
       execSync.mockReturnValue('output');
       
-      runPipeline(['echo', 'hello']);
+      runPipeline(['["echo hello"]']);
       
       expect(execSync).toHaveBeenCalledWith('echo hello', {
         stdio: 'inherit',
@@ -219,10 +226,10 @@ describe('run_pipeline_if_allowed', () => {
       expect(process.exit).not.toHaveBeenCalled();
     });
 
-    it('should execute allowed pipeline commands', () => {
+    it('should execute allowed pipeline commands from JSON array', () => {
       execSync.mockReturnValue('output');
       
-      runPipeline(['echo', 'hello', '|', 'grep', 'h', '|', 'sort']);
+      runPipeline(['["echo hello", "grep h", "sort"]']);
       
       expect(execSync).toHaveBeenCalledWith('echo hello | grep h | sort', {
         stdio: 'inherit',
@@ -231,16 +238,16 @@ describe('run_pipeline_if_allowed', () => {
       expect(process.exit).not.toHaveBeenCalled();
     });
 
-    it('should reject pipeline with disallowed command', () => {
-      runPipeline(['rm', 'file.txt', '|', 'echo', 'hello']);
+    it('should reject JSON array with disallowed command', () => {
+      runPipeline(['["rm file.txt", "echo hello"]']);
       
       expect(console.error).toHaveBeenCalledWith('⛔ Not allowed: rm file.txt');
       expect(process.exit).toHaveBeenCalledWith(1);
       expect(execSync).not.toHaveBeenCalled();
     });
 
-    it('should reject single disallowed command', () => {
-      runPipeline(['rm', '-rf', '/']);
+    it('should reject single disallowed command from JSON array', () => {
+      runPipeline(['["rm -rf /"]']);
       
       expect(console.error).toHaveBeenCalledWith('⛔ Not allowed: rm -rf /');
       expect(process.exit).toHaveBeenCalledWith(1);
@@ -254,7 +261,7 @@ describe('run_pipeline_if_allowed', () => {
         throw error;
       });
       
-      runPipeline(['echo', 'hello']);
+      runPipeline(['["echo hello"]']);
       
       expect(process.exit).toHaveBeenCalledWith(2);
     });
@@ -265,28 +272,33 @@ describe('run_pipeline_if_allowed', () => {
         throw error;
       });
       
-      runPipeline(['echo', 'hello']);
+      runPipeline(['["echo hello"]']);
       
       expect(process.exit).toHaveBeenCalledWith(1);
     });
 
-    it('should validate each segment of complex pipeline', () => {
-      runPipeline(['rm', '|', 'ls', '|', 'grep', 'test']);
+    it('should validate each segment of complex pipeline from JSON array', () => {
+      runPipeline(['["rm", "ls", "grep test"]']);
       
       expect(console.error).toHaveBeenCalledWith('⛔ Not allowed: rm');
       expect(process.exit).toHaveBeenCalledWith(1);
       expect(execSync).not.toHaveBeenCalled();
     });
 
-    it('should trim whitespace from pipeline segments', () => {
-      execSync.mockReturnValue('output');
+    it('should handle invalid JSON format', () => {
+      runPipeline(['[invalid json]']);
       
-      runPipeline(['echo', 'hello', '|', ' grep ', 'h ', '|', ' sort']);
+      expect(console.error).toHaveBeenCalledWith('❌ Invalid JSON array format');
+      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(execSync).not.toHaveBeenCalled();
+    });
+
+    it('should handle non-array JSON', () => {
+      runPipeline(['{"not": "array"}']);
       
-      expect(execSync).toHaveBeenCalledWith('echo hello |  grep  h  |  sort', {
-        stdio: 'inherit',
-        shell: '/bin/bash'
-      });
+      expect(console.error).toHaveBeenCalledWith('❌ Invalid JSON array format');
+      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(execSync).not.toHaveBeenCalled();
     });
   });
 
@@ -323,7 +335,7 @@ describe('run_pipeline_if_allowed', () => {
       execSync.mockReturnValue('mocked output');
       
       // Execute pipeline
-      runPipeline(['echo', 'test', '|', 'grep', 'e', '|', 'sort']);
+      runPipeline(['["echo test", "grep e", "sort"]']);
       
       // Verify file system calls
       expect(fs.existsSync).toHaveBeenCalledWith(path.resolve('.claude/settings.json'));

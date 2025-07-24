@@ -42,14 +42,24 @@ function runPipeline(args) {
   const allowList = loadAllowList();
 
   // Parse arguments
-  if (args.length === 0) {
-    console.error('❌ Usage: node run_pipeline.js <cmd1> | <cmd2> | ...');
+  if (args.length !== 1) {
+    console.error('❌ Usage: node run_pipeline.js \'["cmd1", "cmd2", ...]\'');
     process.exit(1);
   }
 
-  // Split args by `|`
-  const raw = args.join(' ');
-  const segments = raw.split('|').map(s => s.trim());
+  let segments;
+  try {
+    segments = JSON.parse(args[0]);
+    if (!Array.isArray(segments)) {
+      console.error('❌ Invalid JSON array format');
+      process.exit(1);
+      return; // Early return for testing
+    }
+  } catch (err) {
+    console.error('❌ Invalid JSON array format');
+    process.exit(1);
+    return; // Early return for testing
+  }
 
   // Check each segment
   for (const seg of segments) {
@@ -61,8 +71,9 @@ function runPipeline(args) {
   }
 
   // Execute as full pipeline
+  const pipelineCommand = segments.join(' | ');
   try {
-    const output = execSync(raw, { stdio: 'inherit', shell: '/bin/bash' });
+    const output = execSync(pipelineCommand, { stdio: 'inherit', shell: '/bin/bash' });
   } catch (err) {
     process.exit(err.status ?? 1);
     return; // Early return for testing
